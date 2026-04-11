@@ -76,18 +76,13 @@ These Claude-specific frontmatter fields have no meaning in Codex:
 - `version` — remove unless explicitly needed
 - `author_url` — remove
 
-### Add to Codex output
-
-These fields should be added if not already present:
-
-```yaml
-invocation: explicit        # or: implicit
-```
-
 ### Preserve as-is
 
 - `name`
-- `description` — preserve and optionally append `$skill-name` trigger note
+- `description` — preserve and rewrite so it clearly explains when the skill
+  should trigger, when it should not trigger, and how to invoke it
+- no frontmatter fields other than `name` and `description` are valid in the
+  converted output
 
 ---
 
@@ -116,4 +111,5 @@ Example output:
 - Workflow logic (steps, conditions, branching)
 - Domain-specific instructions (git commands, file formats, APIs)
 - References to standard shell tools (grep, sed, awk, curl, etc.)
-- MCP tool names (preserve and declare in agents/openai.yaml instead)
+- MCP tool names in the body (preserve them, but require explicit approval
+  before adding any `mcp_servers` entries to `agents/openai.yaml`)
