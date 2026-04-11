@@ -69,7 +69,8 @@ continuing.
 Transform: Maps Claude tools to Codex equivalents line-by-line and preserves
 risky lines with `# REVIEW`.
 
-Generate: Creates the required `agents/openai.yaml` metadata after MCP approval.
+Generate: Step 5 proposes `agents/openai.yaml`; Step 6 only approves and
+finalizes MCP entries.
 
 Install: Writes the final version to your `.codex/skills/` directory or previews
 it with `--dry-run`.
@@ -82,8 +83,8 @@ flowchart LR
     B --> C["2 Confirm\nmatch + risk"]
     C --> D["3 Fetch\nSKILL.md"]
     D --> E["4 Analyse\nClaude refs + safety"]
-    E --> F["5 Transform\nline by line"]
-    F --> G["6 Approve MCP +\nGenerate openai.yaml"]
+    E --> F["5 Transform +\nPropose openai.yaml"]
+    F --> G["6 Approve MCP +\nFinalize openai.yaml"]
     G --> H["7 Write or preview\n.codex/skills/"]
     H --> I["7b Validate\nskill-creator rules"]
     I --> J(["8 Report\nsummary"])
@@ -135,7 +136,7 @@ $claude-to-codex <skill-name> [flags]
 | `--dry-run` | Preview the transformed output and validation report without writing files |
 | `--no-yaml` | Skip generating `agents/openai.yaml` |
 | `--overwrite` | Skip only the existing-directory overwrite prompt |
-| `--multi-agent` | Explorer + worker sub-agents for fetch, analysis, and transform |
+| `--multi-agent` | Explorer + worker sub-agents for fetch, analysis, transform, and proposed YAML generation |
 | `--test` | Validate output; with `--dry-run`, validate generated content in memory |
 
 ---
@@ -234,8 +235,8 @@ The strictest mode. Three roles are involved:
 
 ```text
 Explorer (gpt-5.4-mini)  -> fetch + analyse
-Worker   (gpt-5.4)       -> transform
-You                     -> trust prompts, MCP approval, yaml, validation, report
+Worker   (gpt-5.4)       -> transform + propose yaml
+You                      -> trust prompts, MCP approval, finalize yaml, validation, report
 ```
 
 If files are written, validation may still use an independent cold-read tester

@@ -61,8 +61,8 @@ $claude-to-codex docx --dry-run --test
 **Default (single agent):** You run all 8 steps yourself, in order.
 
 **`--multi-agent`:** Steps 3–4 go to an explorer agent, Step 5 goes to a
-worker agent, and you keep the confirmation, install, YAML, validation, and
-reporting steps.
+worker agent that transforms the skill and proposes `openai.yaml`, and you keep
+the confirmation, install, MCP approval, validation, and reporting steps.
 
 **`--test`:** Adds Step 7b validation.
 
@@ -94,7 +94,7 @@ Track your progress with a checklist at the start of your response:
 - [ ] Step 3: Fetch
 - [ ] Step 4: Analyse
 - [ ] Step 5: Transform
-- [ ] Step 6: Approve MCP entries and generate openai.yaml
+- [ ] Step 6: Approve MCP entries and finalize openai.yaml
 - [ ] Step 7: Write files or preview
 - [ ] Step 7b: Validate (`--test` only)
 - [ ] Step 8: Report
@@ -420,15 +420,7 @@ Spawn one agent:
               review_flags: N
             },
             review_lines: ['<each # REVIEW line>'],
-            mcp_candidates: [
-              { name: '<tool-name>', url: '<known-url-or-null>', reason: '<why>' }
-            ],
-            metadata: {
-              display_name: <title case>,
-              icon: <inferred icon>,
-              brand_color: <hex>,
-              description: <first sentence of transformed description>
-            }
+            openai_yaml: <full proposed agents/openai.yaml text>
           }"
 ```
 
@@ -457,31 +449,11 @@ Update `description` so it:
 - includes likely trigger phrases
 - ends with `Invoke with $<safe-slug>.`
 
-For any risky or ambiguous line, add these comments above it:
+Build a proposed `openai_yaml` in this step.
+This is the single source of truth for non-approval YAML fields in multi-agent
+mode.
 
-```text
-# REVIEW: Original used "<original phrase>" and needs manual verification.
-# REVIEW: Do not trust or execute this step until it has been reviewed.
-```
-
-Do not silently drop risky lines.
-Do not rewrite risky instructions into wording that makes them look safe.
-
-Preserve MCP references in the body, but never auto-trust them.
-Extract candidate MCP entries as structured data for Step 6.
-
----
-
-### Step 6: Approve MCP entries and generate agents/openai.yaml
-
-> Orchestrator always runs this step.
-
-If `--no-yaml` is set:
-- skip YAML generation
-- keep the MCP candidate list for the final report
-- add `# REVIEW` for MCP references if they are not already flagged
-
-Otherwise generate:
+Generate:
 
 ```yaml
 display_name: <Title Case of skill name>
@@ -504,12 +476,42 @@ Infer `icon` and `brand_color` from the skill's name and description:
 | image, design, ui, frontend, artifact | `layout` | `#db2777` |
 | no match | `tool` | `#6b7280` |
 
-If MCP candidates were detected, ask before adding `mcp_servers`:
+For any risky or ambiguous line, add these comments above it:
+
+```text
+# REVIEW: Original used "<original phrase>" and needs manual verification.
+# REVIEW: Do not trust or execute this step until it has been reviewed.
+```
+
+Do not silently drop risky lines.
+Do not rewrite risky instructions into wording that makes them look safe.
+
+Preserve MCP references in the body, but never auto-trust them.
+Only include known-URL `mcp_servers` entries in the proposed `openai_yaml`.
+If an MCP reference has no known URL, keep it out of `openai_yaml` and leave it
+in `# REVIEW` lines and `review_lines`.
+
+---
+
+### Step 6: Approve MCP entries and finalize agents/openai.yaml
+
+> Orchestrator always runs this step.
+
+If `--no-yaml` is set:
+- skip YAML generation
+- rely on the worker's `# REVIEW` lines for MCP references
+
+Otherwise use the Step 5-generated `openai_yaml` as the base YAML.
+If `--multi-agent` is set, that means the worker-returned `openai_yaml`.
+If single-agent, use the `openai_yaml` you generated locally in Step 5.
+Do not recompute `display_name`, `icon`, `brand_color`, or `description` here.
+
+If `mcp_servers` entries are present in the proposed `openai_yaml`, ask before
+finalizing them:
 
 ```text
 Detected MCP entries:
 1. github -> https://mcp.github.com/mcp
-2. my-api -> unknown URL
 
 Which MCP entries should I include in agents/openai.yaml?
 Enter: all | none | comma-separated names
@@ -517,7 +519,7 @@ Enter: all | none | comma-separated names
 
 Approval rules:
 - include only entries the user explicitly approves
-- if a candidate has no known URL, omit it even if approved and add `# REVIEW`
+- preserve every non-MCP field from the proposed `openai_yaml` unchanged
 - if the user chooses `none`, omit the `mcp_servers` section entirely
 
 ---
@@ -577,6 +579,7 @@ Validation checklist:
    - `invocation_policy` present
    - `display_name` present
    - `mcp_servers` contains only explicitly approved entries with known URLs
+   - non-MCP fields match the Step 5 proposed `openai_yaml`
 
 Mode rules:
 - If files were written, validate the written files.

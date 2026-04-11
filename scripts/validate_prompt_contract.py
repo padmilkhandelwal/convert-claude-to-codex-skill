@@ -26,6 +26,11 @@ SKILL_REQUIRED_PHRASES = [
     "If `--multi-agent` is set and files were written, you may spawn one\n  independent tester agent that reads the written files cold.",
 ]
 
+WORKER_YAML_REQUIRED_PHRASES = [
+    "openai_yaml: <full proposed agents/openai.yaml text>",
+    "Do not recompute `display_name`, `icon`, `brand_color`, or `description` here.",
+]
+
 
 def tracked_paths() -> list[str]:
     output = subprocess.check_output(
@@ -89,6 +94,43 @@ def check_shared_snippets(skill_text: str, readme_text: str, errors: list[str]) 
         )
 
 
+def section_between(text: str, start: str, end: str) -> str:
+    try:
+        start_index = text.index(start)
+        end_index = text.index(end, start_index)
+    except ValueError:
+        return ""
+    return text[start_index:end_index]
+
+
+def check_worker_yaml_contract(skill_text: str, errors: list[str]) -> None:
+    missing = [
+        phrase for phrase in WORKER_YAML_REQUIRED_PHRASES if phrase not in skill_text
+    ]
+    if missing:
+        errors.append(
+            "SKILL.md is missing required worker YAML contract phrases: "
+            + "; ".join(repr(item) for item in missing)
+        )
+
+    if "metadata: {" in skill_text:
+        errors.append("SKILL.md must not use the old worker `metadata` block.")
+
+    step_6 = section_between(
+        skill_text,
+        "### Step 6: Approve MCP entries and finalize agents/openai.yaml",
+        "### Step 7: Write the output files",
+    )
+    if not step_6:
+        errors.append("Could not locate Step 6 in SKILL.md for YAML ownership checks.")
+        return
+
+    if "Infer `icon` and `brand_color`" in step_6:
+        errors.append(
+            "Step 6 must not infer icon/brand_color; those belong to Step 5."
+        )
+
+
 def main() -> int:
     errors: list[str] = []
 
@@ -101,6 +143,7 @@ def main() -> int:
     check_tool_map_frontmatter(tool_map_text, errors)
     check_skill_required_phrases(skill_text, errors)
     check_shared_snippets(skill_text, readme_text, errors)
+    check_worker_yaml_contract(skill_text, errors)
 
     if errors:
         print("Prompt contract validation failed:")
