@@ -8,7 +8,10 @@
 
 ## Why this exists
 
-Claude and Codex skills share a similar structure, but small differences in tool naming and configuration can break compatibility. This tool automates the entire migration so you can run your favorite Claude skills directly within the Codex CLI.
+Claude and Codex skills share a similar structure, but small differences in tool
+naming and configuration can break compatibility. This tool automates the
+migration so you can run your favorite Claude skills directly within the Codex
+CLI.
 
 | | Claude Code | Codex CLI |
 |---|---|---|
@@ -21,36 +24,68 @@ Claude and Codex skills share a similar structure, but small differences in tool
 | App metadata | Not required | `agents/openai.yaml` |
 | Frontmatter fields | name, description, license, model… | name + description only |
 
-`$claude-to-codex` handles every substitution automatically, rewrites
-frontmatter, generates `agents/openai.yaml`, optionally validates the output
-with an independent tester agent, and writes the result directly to
-`.codex/skills/` — zero manual editing required.
+`$claude-to-codex` handles the tool substitutions, rewrites frontmatter,
+generates `agents/openai.yaml`, can validate the output, and writes the result
+to `.codex/skills/` or `~/.codex/skills/`.
+
+---
+
+## New In This Fork
+
+- Search results are now labeled by trust tier: `official`, `community`, or
+  `scraped`.
+- Community GitHub matches and Skills Playground fallbacks stay supported, but
+  now require explicit warning acknowledgement before conversion continues.
+- Install paths are derived from a sanitized confirmed slug instead of raw user
+  input, with path-boundary checks before any write.
+- Risky or ambiguous source lines stay visible with `# REVIEW` instead of being
+  silently normalized.
+- Candidate MCP entries are detected but require explicit approval before being
+  written into `agents/openai.yaml`.
+- A lightweight prompt-contract validator and CI workflow now protect the skill
+  docs from drifting back into unsafe guidance.
+
+When `--dry-run` is set, generate the transformed output and validation report
+without writing any files.
+
+When `--dry-run` and `--test` are combined, validate the generated content in
+memory rather than from written files.
+
+Candidate MCP entries require explicit user approval before inclusion in
+`agents/openai.yaml`.
+
+`--overwrite` skips only the existing-directory overwrite prompt.
 
 ---
 
 ## How it works
 
-How it works
-Search: Finds the skill in the marketplace.
+Search: Finds the skill in the marketplace and labels each result with a trust
+tier.
 
-Transform: Maps Claude tools to Codex equivalents line-by-line.
+Confirm: Shows the chosen source URL, trust tier, and risk note before
+continuing.
 
-Generate: Creates the required agents/openai.yaml metadata.
+Transform: Maps Claude tools to Codex equivalents line-by-line and preserves
+risky lines with `# REVIEW`.
 
-Install: Writes the final version to your .codex/skills/ directory.
+Generate: Step 5 proposes `agents/openai.yaml`; Step 6 only approves and
+finalizes MCP entries.
 
+Install: Writes the final version to your `.codex/skills/` directory or previews
+it with `--dry-run`.
 
 ```mermaid
 flowchart LR
     A(["$claude-to-codex\ndocx --test"])
 
-    A --> B["1 Search\nmarketplace"]
-    B --> C["2 Confirm\nmatch"]
+    A --> B["1 Search\nmarketplace + trust tier"]
+    B --> C["2 Confirm\nmatch + risk"]
     C --> D["3 Fetch\nSKILL.md"]
-    D --> E["4 Analyse\nClaude refs"]
-    E --> F["5 Transform\nline by line"]
-    F --> G["6 Generate\nopenai.yaml"]
-    G --> H["7 Write\nto .codex/skills/"]
+    D --> E["4 Analyse\nClaude refs + safety"]
+    E --> F["5 Transform +\nPropose openai.yaml"]
+    F --> G["6 Approve MCP +\nFinalize openai.yaml"]
+    G --> H["7 Write or preview\n.codex/skills/"]
     H --> I["7b Validate\nskill-creator rules"]
     I --> J(["8 Report\nsummary"])
 
@@ -60,11 +95,11 @@ flowchart LR
 ```
 
 The `--test` step (7b) is optional. Without it, the skill goes straight from
-write → report.
+write or preview → report.
 
 ---
 
-## How to Install and Convert Your First Skill 
+## How to Install and Convert Your First Skill
 
 ```bash
 # 1. Clone and install globally
@@ -79,15 +114,17 @@ codex --search
 $claude-to-codex docx
 ```
 
-The skill will ask two questions before touching anything:
-1. **Confirm the match** — shows name, author, description before proceeding
-2. **Where to install** — project-local or global (skip with `--global` flag)
+The skill will ask for confirmation before touching anything:
+1. **Confirm the match** — shows source URL, trust tier, and risk note
+2. **Acknowledge source risk** — only for `community` or `scraped` sources
+3. **Where to install** — project-local or global (skip with `--global` or
+   preview only with `--dry-run`)
 
 ---
 
 ## Usage
 
-```
+```text
 $claude-to-codex <skill-name> [flags]
 ```
 
@@ -96,11 +133,11 @@ $claude-to-codex <skill-name> [flags]
 | Flag | Description |
 |---|---|
 | `--global` | Install to `~/.codex/skills/` instead of `.codex/skills/` |
-| `--dry-run` | Preview the transformed SKILL.md without writing files |
+| `--dry-run` | Preview the transformed output and validation report without writing files |
 | `--no-yaml` | Skip generating `agents/openai.yaml` |
-| `--overwrite` | Replace an existing skill without prompting |
-| `--multi-agent` | Explorer + worker sub-agents for Steps 3–6 |
-| `--test` | Validate output against skill-creator rules after writing |
+| `--overwrite` | Skip only the existing-directory overwrite prompt |
+| `--multi-agent` | Explorer + worker sub-agents for fetch, analysis, transform, and proposed YAML generation |
+| `--test` | Validate output; with `--dry-run`, validate generated content in memory |
 
 ---
 
@@ -112,23 +149,24 @@ $claude-to-codex <skill-name> [flags]
 $claude-to-codex docx
 ```
 
-The skill asks two questions before touching anything:
+The skill confirms the source before touching anything:
 
-```
-Found `docx` by anthropics. Generate and manage Word documents (.docx).
+```text
+Found `docx` by anthropics
+Source: https://github.com/anthropics/skills/blob/main/skills/docx/SKILL.md
+Trust tier: official
+Risk: Official Anthropic source. Review still recommended before use.
 Proceed with conversion? (y/n): y
 
 Where should I install the converted skill?
 
-  1. This project only   →  .codex/skills/docx/
-  2. Global (all projects)  →  ~/.codex/skills/docx/
+  1. This project only   -> .codex/skills/docx/
+  2. Global (all projects) -> ~/.codex/skills/docx/
 
 Enter 1 or 2: 1
 
 ✓ Written to .codex/skills/docx/
 ```
-
-Takes about 20 seconds end to end.
 
 ---
 
@@ -138,37 +176,9 @@ Takes about 20 seconds end to end.
 $claude-to-codex pptx --dry-run
 ```
 
-Prints the transformed `SKILL.md` and `agents/openai.yaml` to the terminal
-without writing any files. Use this to review changes before installing.
-
-**Example output:**
-
-```
---- SKILL.md (transformed) ---
-
----
-name: pptx
-description: >
-  Create, edit, and format PowerPoint presentations (.pptx files).
-  Use when asked to make slides, build a deck, or edit a presentation.
-  Not for PDF or Word documents. Invoke with $pptx.
----
-
-# pptx
-
-To build a polished PowerPoint presentation, follow these steps:
-...
-
---- agents/openai.yaml ---
-
-display_name: PPTX Builder
-icon: layout
-brand_color: "#db2777"
-invocation_policy: explicit
-description: Create and edit PowerPoint presentations.
-
-Dry run complete. No files written.
-```
+Prints the transformed `SKILL.md`, the resolved target path, the source trust
+summary, and `agents/openai.yaml` to the terminal without writing any files.
+Use this to review changes before installing.
 
 ---
 
@@ -189,15 +199,15 @@ project on your machine, not just the current one.
 $claude-to-codex "write commit message" --dry-run
 ```
 
-The skill searches the marketplace with your phrase and shows a numbered list
-if multiple results match. You pick one before anything is converted.
+The skill searches the marketplace with your phrase and shows a numbered list if
+multiple results match. Every result includes a trust tier before you choose:
 
-```
+```text
 Found 3 results for "write commit message":
 
-  1. git-commit      (anthropics/skills)   Generate conventional commit messages
-  2. commit-helper   (community)           AI-powered commit message writer
-  3. conventional-commits (community)      Enforce conventional commit format
+  1. git-commit      (anthropics/skills)   [official]
+  2. commit-helper   (community)           [community]
+  3. conventional-commits (skillsplayground) [scraped]
 
 Pick a number (1–3):
 ```
@@ -210,24 +220,8 @@ Pick a number (1–3):
 $claude-to-codex docx --test
 ```
 
-After writing the files, runs a full skill-creator validation pass:
-
-```
-Skill validation report
-  Path:   .codex/skills/docx/SKILL.md
-  Mode:   inline
-
-  Frontmatter        [PASS]  name: docx, description: 34 words, no extra fields
-  Description        [PASS]  trigger scope clear, includes trigger phrases
-  Body               [WARN]  2 lines flagged with # REVIEW
-  agents/openai.yaml [PASS]  invocation_policy and display_name present
-
-  Result: PASS WITH WARNINGS
-
-  Review these lines before using the skill:
-    Line 47: # REVIEW: Original used "MemoryWrite tool" — no Codex equivalent found.
-    Line 83: # REVIEW: Original referenced CLAUDE.md project config — verify AGENTS.md applies.
-```
+After generating the files, runs a validation pass covering frontmatter,
+description quality, `# REVIEW` lines, and `agents/openai.yaml`.
 
 ---
 
@@ -237,170 +231,65 @@ Skill validation report
 $claude-to-codex docx --multi-agent --test
 ```
 
-The strictest mode. Three sub-agents run in sequence:
+The strictest mode. Three roles are involved:
 
-```
-Explorer (gpt-5.4-mini)  →  fetch + analyse
-Worker   (gpt-5.4)       →  transform + generate yaml
-Tester   (gpt-5.4-mini)  →  cold read validation (no context of how it was built)
-```
-
-The tester reads the output files fresh — it has no memory of the transformation
-steps. This catches issues the writer misses because it's checking its own work.
-
----
-
-### Bulk conversion in one session
-
-```bash
-$claude-to-codex docx --multi-agent --test --global
-$claude-to-codex pptx --multi-agent --test --global
-$claude-to-codex xlsx --multi-agent --test --global
+```text
+Explorer (gpt-5.4-mini)  -> fetch + analyse
+Worker   (gpt-5.4)       -> transform + propose yaml
+You                      -> trust prompts, MCP approval, finalize yaml, validation, report
 ```
 
-Use `--multi-agent` for multiple conversions in the same session. Each
-conversion gets its own explorer + worker pair, keeping context clean between
-runs. `--global` installs all three so they're available in every project.
+If files are written, validation may still use an independent cold-read tester
+after generation.
 
 ---
 
-## What changes during transformation
-
-### Tool substitutions
-
-| Claude instruction | Codex equivalent |
-|---|---|
-| `Use TodoWrite to track progress` | `Track progress in a checklist in your response` |
-| `Use TodoRead to check tasks` | `Review your checklist` |
-| `Use the Bash tool to run <cmd>` | `Run <cmd> in the shell` |
-| `Use the WebSearch tool to find X` | `Search the web for X` |
-| `Use the Read tool to open <file>` | `Read the contents of <file>` |
-| `Use the Write tool to save to <file>` | `Write the output to <file>` |
-| `Use the Task tool to delegate X` | `Spawn one agent with task: "X"` |
-| `CLAUDE.md` | `AGENTS.md` |
-| `claude.ai artifact` | `standalone HTML artifact` |
-
-### Frontmatter — before and after
-
-```yaml
-# Before (Claude) — has extra fields that break Codex validation
----
-name: git-commit
-description: Generate a conventional Git commit message.
-license: MIT
-version: 1.2.0
----
-
-# After (Codex) — only name + description, per skill-creator spec
----
-name: git-commit
-description: >
-  Generates a conventional Git commit message from staged changes.
-  Use when asked to write a commit, commit staged changes, or generate
-  a commit message. Not for branch management or rebasing.
-  Invoke with $git-commit.
----
-```
-
-### Generated agents/openai.yaml
-
-```yaml
-display_name: Git Commit Generator
-icon: git-branch          # inferred from skill keywords
-brand_color: "#f05032"    # inferred from icon
-invocation_policy: explicit
-description: Generates a conventional Git commit message from staged changes.
-```
-
----
-
-## Output structure
-
-After running `$claude-to-codex git-commit`:
-
-```
-.codex/skills/
-  git-commit/
-    SKILL.md           ← transformed, Codex-ready skill
-    agents/
-      openai.yaml      ← generated app metadata
-```
-
----
-
-## Execution modes
-
-```
-$claude-to-codex docx
-  → You run all 8 steps. Fast, simple.
-
-$claude-to-codex docx --multi-agent
-  → Explorer: fetch + analyse
-  → Worker:   transform + generate yaml
-  → You:      search, confirm, write, report
-
-$claude-to-codex docx --test
-  → Same as default + inline validation after writing
-
-$claude-to-codex docx --multi-agent --test
-  → Explorer + Worker + independent Tester sub-agent
-  → Strictest mode — tester reads output cold
-```
-
----
-
-## Tested on
-
-| Skill | Source | Changes | REVIEW flags | Result |
-|---|---|---|---|---|
-| `web-artifacts-builder` | anthropics/skills | 4 | 0 | PASS |
-| `docx` | anthropics/skills | TBD | TBD | try it → open a PR |
-| `pptx` | anthropics/skills | TBD | TBD | try it → open a PR |
-
----
-
-## Edge cases
+## Edge Cases
 
 | Situation | Behaviour |
 |---|---|
 | Skill not found | Reports clearly, offers alternate query |
-| Fetch fails (all 3 sources) | Lists every URL tried, stops |
-| Skill already exists | Asks before overwriting — bypass with `--overwrite` |
+| Fetch fails | Lists every URL tried, stops |
+| Unsafe or invalid slug | Stops before writing files |
+| Path escapes skills directory | Stops before writing files |
+| Skill already exists | Asks before overwriting — bypass only that prompt with `--overwrite` |
 | Unknown tool reference | Flags with `# REVIEW`, never silently drops |
-| MCP tool reference | Preserves name, adds to `mcp_servers` in openai.yaml |
+| Risky source instruction | Preserves with `# REVIEW`, never silently normalizes |
+| MCP tool reference | Preserves in the body and asks for approval before adding to `mcp_servers` |
 | Cached web search mode | Warns user, recommends `--search` flag |
-| Validation FAIL | Lists every failure, asks fix/proceed before continuing |
 
 ---
 
-## Repo structure
+## Repo Checks
 
+This fork includes a lightweight prompt-contract validator:
+
+```bash
+python3 scripts/validate_prompt_contract.py
 ```
+
+It catches:
+- tracked paths that begin with whitespace
+- duplicate step headers in `SKILL.md`
+- forbidden frontmatter guidance such as `invocation` returning to
+  `references/tool-map.md`
+- missing trust-tier, path-safety, or MCP-approval language
+- drift between `README.md` and `SKILL.md` for `--dry-run`, `--test`, and MCP
+  behavior
+
+---
+
+## Repo Structure
+
+```text
 claude-to-codex/
-  SKILL.md                        ← the skill Codex executes
-  README.md                       ← you are here
+  SKILL.md
+  README.md
   agents/
-    openai.yaml                   ← Codex app metadata for this skill
+    openai.yaml
   references/
-    tool-map.md                   ← Claude → Codex substitution rules
-    codex-tool-dictionary.md      ← full Codex built-in tool reference
+    tool-map.md
+    codex-tool-dictionary.md
+  scripts/
+    validate_prompt_contract.py
 ```
-
----
-
-## Contributing
-
-Found a skill that didn't convert cleanly? Open an issue with:
-
-1. The Claude skill name and source URL
-2. The line(s) that caused problems
-3. What the correct Codex equivalent should be
-
-PRs especially welcome for additions to `references/tool-map.md` — every
-new tool substitution makes the transformer smarter for everyone.
-
----
-
-## License
-
-MIT — free to use, fork, and build on.

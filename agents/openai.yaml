@@ -2,4 +2,4 @@ display_name: Claude to Codex
 icon: tool
 brand_color: "#7c3aed"
 invocation_policy: explicit
-description: Transform any Claude skill into a Codex-compatible skill with automatic tool substitution and file generation.
+description: Transform Claude skills into Codex-compatible skills with trust-tier warnings, safe path handling, safety review, and explicit MCP approval.

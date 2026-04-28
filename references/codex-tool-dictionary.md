@@ -208,13 +208,18 @@ args    = ["-y", "@my-org/my-mcp-server"]
 ### Claude → Codex (MCP tools)
 
 Claude skills that reference specific MCP tools by name should preserve those
-references and declare them in `agents/openai.yaml`:
+references, but they are not auto-trusted. Candidate MCP entries should be
+reviewed with the user before anything is written to `agents/openai.yaml`:
 
 ```yaml
 mcp_servers:
   - name: github
     url: https://mcp.github.com/mcp
 ```
+
+Only explicitly approved entries with known URLs should be written. Unknown or
+declined entries should stay out of YAML and remain visible for manual review in
+the transformed skill body.
 
 ---
 
