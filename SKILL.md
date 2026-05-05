@@ -126,41 +126,35 @@ If multiple results are found:
 - Ask the user to pick a number.
 - Wait for selection before continuing.
 
-### Step 2: Confirm the match
-
-If exactly one result is found:
-- Show the skill name, author, and one-line description.
-- Ask: "Found `<n>` by <author>. Proceed with conversion? (y/n)"
-- Wait for confirmation before continuing.
-
-If multiple results are found:
-- List up to 5 results as a numbered menu (name + author + description).
-- Ask the user to pick a number.
-- Wait for selection before continuing.
-
 ---
 
 ### Step 2b: Ask where to install
 
 > Skip this step if `--global` or `--dry-run` was already passed.
-> `--global` flag → use `~/.codex/skills/<skill-name>/` and proceed.
+> `--global` flag → use `~/.codex/skills/<sanitized-name>/` and proceed.
 > `--dry-run` flag → no install location needed, proceed.
+
+**Sanitize the skill name:**
+Before constructing any paths, create `<sanitized-name>` from `<skill-name>`:
+1. Replace all spaces with hyphens.
+2. Remove any characters that are not alphanumeric, hyphens, or underscores.
+3. This prevents path traversal (by removing `.` and `/`) and ensures a valid directory name.
 
 Ask the user:
 
 ```
 Where should I install the converted skill?
 
-  1. This project only   →  .codex/skills/<skill-name>/
-  2. Global (all projects)  →  ~/.codex/skills/<skill-name>/
+  1. This project only   →  .codex/skills/<sanitized-name>/
+  2. Global (all projects)  →  ~/.codex/skills/<sanitized-name>/
 
 Enter 1 or 2:
 ```
 
 Wait for their answer. Store the chosen path as the target for Step 7.
 
-If they pick 1: target = `.codex/skills/<skill-name>/`
-If they pick 2: target = `~/.codex/skills/<skill-name>/`
+If they pick 1: target = `.codex/skills/<sanitized-name>/`
+If they pick 2: target = `~/.codex/skills/<sanitized-name>/`
 
 If the target directory already exists:
 - Tell them: "`<target>` already exists."
@@ -543,7 +537,7 @@ Spawn one agent:
 
           FRONTMATTER (read the raw YAML block between --- markers)
           [ ] name field present
-          [ ] name matches the folder name: <skill-name>
+          [ ] name matches the folder name: <sanitized-name>
           [ ] description field present and non-empty
           [ ] NO extra fields exist (invocation, license, model,
               version, author_url are all invalid in frontmatter)
